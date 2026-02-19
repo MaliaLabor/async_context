@@ -1396,7 +1396,11 @@ public:
   constexpr auto await_transform(
     std::chrono::duration<Rep, Ratio> p_sleep_duration) noexcept
   {
+    // NOLINTBEGIN(clang-analyzer-core.CallAndMessage): False positive
+    // clang-tidy assuming that m_context is uninitialized even though its
+    // initialized at construction.
     return m_context->block_by_time(p_sleep_duration);
+    // NOLINTEND(clang-analyzer-core.CallAndMessage)
   }
 
   /**
@@ -1408,8 +1412,7 @@ public:
    */
   constexpr std::suspend_always await_transform() noexcept
   {
-    m_context->block_by_io();
-    return {};
+    return m_context->block_by_io();
   }
 
   /**
@@ -1980,7 +1983,7 @@ public:
       return handle;
     }
 
-    constexpr monostate_or<T>& await_resume() const
+    [[nodiscard]] constexpr monostate_or<T>& await_resume() const
       requires(not std::is_void_v<T>)
     {
       if (std::holds_alternative<T>(m_operation.m_state)) [[likely]] {

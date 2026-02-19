@@ -5,7 +5,8 @@
 import async_context;
 import test_utils;
 
-boost::ut::suite<"basics"> basics = []() {
+void basics()
+{
   using namespace boost::ut;
 
   "sync return type void"_test = []() {
@@ -171,7 +172,7 @@ boost::ut::suite<"basics"> basics = []() {
     };
     auto co = [&step, &co2](async::context& p_ctx) -> async::future<int> {
       step = 1;  // skipped as the co2 will immediately start
-      co_await co2(p_ctx);
+      [[maybe_unused]] auto val = co_await co2(p_ctx);
       step = 4;
       co_return expected_return_value;
     };
@@ -250,3 +251,8 @@ boost::ut::suite<"basics"> basics = []() {
     expect(that % 2 == step);
   };
 };
+
+int main()
+{
+  basics();
+}
