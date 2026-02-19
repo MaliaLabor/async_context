@@ -3,6 +3,7 @@ module;
 #include <chrono>
 #include <ostream>
 #include <variant>
+#include <print>
 
 #include <boost/ut.hpp>
 

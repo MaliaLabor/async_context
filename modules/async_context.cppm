@@ -1040,6 +1040,49 @@ private:
 export class exclusive_access
 {
 public:
+  class guard
+  {
+  public:
+    guard(exclusive_access* p_parent)
+      : m_parent(p_parent)
+    {
+    }
+
+    ~guard()
+    {
+      release();
+    }
+
+    // Non-copyable, non-movable (must live on stack)
+    guard(guard const&) = delete;
+    guard& operator=(guard const&) = delete;
+    guard(guard&&) = delete;
+    guard& operator=(guard&&) = delete;
+
+  private:
+    exclusive_access* m_parent;
+
+    void release()
+    {
+      m_parent->m_owner = nullptr;
+    }
+  };
+
+  /// Grant exclusive access to a context, returns RAII guard
+  [[nodiscard]] guard grant(context& ctx)
+  {
+    m_owner = &ctx;
+    // auto access = exclusive_access(ctx);
+    return {this};
+  }
+
+  /// Get the address of the owning context (for scheduler use)
+  /// Returns nullptr if not held
+  [[nodiscard]] context* owner() const  // what should return type be?
+  {
+    return m_owner;
+  }
+
   /**
    * @brief Default constructor for exclusive_access
    *
@@ -1053,7 +1096,7 @@ public:
    * @param p_capture The context to capture for exclusive access
    */
   constexpr exclusive_access(context& p_capture) noexcept
-    : m_context_address(&p_capture)
+    : m_owner(&p_capture)
   {
   }
 
@@ -1065,7 +1108,7 @@ public:
    */
   constexpr exclusive_access& operator=(context& p_capture) noexcept
   {
-    m_context_address = &p_capture;
+    m_owner = &p_capture;
     return *this;
   }
 
@@ -1077,7 +1120,7 @@ public:
    */
   constexpr exclusive_access& operator=(nullptr_t) noexcept
   {
-    m_context_address = nullptr;
+    m_owner = nullptr;
     return *this;
   }
 
@@ -1122,8 +1165,14 @@ public:
    */
   constexpr bool operator==(context& p_context) noexcept
   {
-    return m_context_address == &p_context;
+    return m_owner == &p_context;
   }
+
+  // /// Check if currently held by any context
+  // [[nodiscard]] bool is_held() const
+  // {
+  //   return m_owner != nullptr;
+  // }
 
   /**
    * @brief Check if this guard is currently holding a context
@@ -1132,7 +1181,7 @@ public:
    */
   [[nodiscard]] constexpr bool in_use() const noexcept
   {
-    return m_context_address != nullptr;
+    return m_owner != nullptr;
   }
 
   /**
@@ -1144,8 +1193,14 @@ public:
    */
   [[nodiscard]] auto address() const noexcept
   {
-    return m_context_address != nullptr;
+    return m_owner != nullptr;
   }
+
+  // /// Convenience operator for checking if held
+  // explicit operator bool() const
+  // {
+  //   return m_owner != nullptr;
+  // }
 
   /**
    * @brief Convert to bool (check if in use)
@@ -1171,7 +1226,7 @@ public:
   constexpr std::suspend_always set_as_block_by_sync(context& p_capture)
   {
     if (in_use()) {
-      p_capture.block_by_sync(m_context_address);
+      p_capture.block_by_sync(m_owner);
     }
     return {};
   }
@@ -1185,16 +1240,18 @@ public:
   constexpr void unblock_and_clear() noexcept
   {
     if (in_use()) {
-      m_context_address->unblock();
-      m_context_address = nullptr;
+      m_owner->unblock();
+      m_owner = nullptr;
     }
   }
 
 private:
+  friend class guard;
+
   /**
    * @brief The address of the context being held, or nullptr if not in use
    */
-  context* m_context_address = nullptr;
+  context* m_owner = nullptr;
 };
 
 /**
